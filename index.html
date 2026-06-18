@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#2563eb" />
+  <title>冷蔵庫の在庫</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="冷蔵庫在庫" />
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <h1 class="app-title">冷蔵庫の在庫</h1>
+      <button id="searchToggle" class="icon-btn" aria-label="検索">
+        <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>
+      </button>
+    </div>
+    <div id="searchBar" class="search-bar" hidden>
+      <input id="searchInput" type="search" placeholder="名称・タグで検索" />
+    </div>
+    <div id="tagFilter" class="tag-filter"></div>
+  </header>
+
+  <main id="main" class="content">
+    <ul id="itemList" class="item-list"></ul>
+    <div id="emptyState" class="empty-state" hidden>
+      <div class="empty-emoji">🧊</div>
+      <p class="empty-title">まだアイテムがありません</p>
+      <p class="empty-sub">右下の <strong>＋</strong> から追加しましょう</p>
+    </div>
+  </main>
+
+  <button id="fab" class="fab" aria-label="アイテムを追加">
+    <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></svg>
+  </button>
+
+  <!-- 追加 / 編集モーダル -->
+  <div id="sheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <h2 id="sheetTitle" class="sheet-title">アイテムを追加</h2>
+      <form id="itemForm" class="form">
+        <label class="field">
+          <span class="field-label">名称</span>
+          <input id="fName" type="text" required placeholder="例）牛乳" autocomplete="off" />
+        </label>
+
+        <div class="field">
+          <span class="field-label">数量</span>
+          <div class="qty-editor">
+            <button type="button" class="qty-btn" data-step="-1">−</button>
+            <input id="fQty" type="number" inputmode="decimal" min="0" step="1" value="1" />
+            <button type="button" class="qty-btn" data-step="1">＋</button>
+            <input id="fUnit" type="text" class="unit-input" placeholder="単位(個/本…)" autocomplete="off" />
+          </div>
+        </div>
+
+        <label class="field">
+          <span class="field-label">タグ（カンマ・スペース区切り）</span>
+          <input id="fTags" type="text" placeholder="例）野菜, 飲み物" autocomplete="off" />
+          <div id="tagSuggest" class="tag-suggest"></div>
+        </label>
+
+        <input type="hidden" id="fId" />
+        <div class="form-actions">
+          <button type="button" id="deleteBtn" class="btn btn-danger" hidden>削除</button>
+          <button type="submit" class="btn btn-primary">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

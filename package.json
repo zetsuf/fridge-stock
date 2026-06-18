@@ -1,0 +1,17 @@
+{
+  "name": "fridge-stock",
+  "version": "1.0.0",
+  "description": "冷蔵庫の中身を管理するモバイル向けアプリ。HTML/CSS/JS で作成し、Capacitor で Android アプリ(APK)化する想定。",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "sharp": "^0.35.1"
+  }
+}
