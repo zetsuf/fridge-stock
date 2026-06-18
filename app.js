@@ -7,8 +7,12 @@ const LEVELS = ['なし', '後わずか', '半分', 'ほぼ新品', '未使用']
 function levelLabel(v) { return LEVELS[v] ?? '未使用'; }
 function levelColor(v) { return ['#cbd5e1', '#f97316', '#f59e0b', '#34d399', '#22c55e'][v] ?? '#22c55e'; }
 
-// 選べるタグは固定6種
-const TAGS = ['野菜', '肉', '調味料', '酒', '冷凍', 'その他'];
+// タグの初期値（以降はユーザーが「タグ管理」で自由に編集）
+const DEFAULT_TAGS = ['野菜', '肉', '調味料', '酒', '冷凍', 'その他'];
+function tagList() {
+  if (!Array.isArray(state.tags) || !state.tags.length) state.tags = DEFAULT_TAGS.slice();
+  return state.tags;
+}
 
 /** @typedef {{id:string,name:string,level:number,tags:string[],lastUsed:number|null,createdAt:number}} Item */
 /** @typedef {{id:string,name:string,items:Item[]}} Page */
@@ -25,7 +29,7 @@ function loadState() {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY));
     if (raw && Array.isArray(raw.pages) && raw.pages.length) {
       if (!raw.pages.find((p) => p.id === raw.activePageId)) raw.activePageId = raw.pages[0].id;
-      normalizeTags(raw); // 旧タグ「氷」→「冷凍」
+      ensureShape(raw);
       return raw;
     }
   } catch {}
@@ -40,18 +44,21 @@ function migrate() {
       id: o.id || uid(),
       name: o.name,
       level: 4,
-      tags: (o.tags || []).filter((t) => TAGS.includes(t)),
+      tags: (o.tags || []).filter((t) => DEFAULT_TAGS.includes(t)),
       lastUsed: o.lastUsed || null,
       createdAt: o.createdAt || Date.now(),
     }));
   } catch {}
   const pid = uid();
-  const st = { version: 2, pages: [{ id: pid, name: 'れいぞうこ', items }], activePageId: pid };
+  const st = { version: 2, tags: DEFAULT_TAGS.slice(), pages: [{ id: pid, name: 'れいぞうこ', items }], activePageId: pid };
   return st;
 }
 
-function normalizeTags(st) {
+// データ形を整える（タグ一覧の初期化 + 旧タグ「氷」→「冷凍」）
+function ensureShape(st) {
   const RENAME = { '氷': '冷凍' };
+  if (!Array.isArray(st.tags) || !st.tags.length) st.tags = DEFAULT_TAGS.slice();
+  st.tags = [...new Set(st.tags.map((t) => RENAME[t] || t))];
   for (const p of st.pages) {
     for (const it of p.items) {
       it.tags = [...new Set((it.tags || []).map((t) => RENAME[t] || t))];
@@ -70,6 +77,7 @@ function applyRemote(remote) {
   if (!remote || !Array.isArray(remote.pages) || !remote.pages.length) return;
   state = remote;
   if (!state.pages.find((p) => p.id === state.activePageId)) state.activePageId = state.pages[0].id;
+  ensureShape(state);
   saveLocal(); // ローカル保存のみ（push し返さない）
   render();
   if (typeof renderPageList === 'function' && !pageSheet.hidden) renderPageList();
@@ -101,7 +109,7 @@ const el = {
 function usedTags() {
   const set = new Set();
   items().forEach((it) => it.tags.forEach((t) => set.add(t)));
-  return TAGS.filter((t) => set.has(t));
+  return tagList().filter((t) => set.has(t));
 }
 
 function visibleItems() {
@@ -249,7 +257,7 @@ function updateLevelLabel() {
 
 function renderTagChoices() {
   tagChoices.innerHTML = '';
-  for (const t of TAGS) {
+  for (const t of tagList()) {
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'choice-chip' + (formTags.includes(t) ? ' selected' : '');
@@ -261,6 +269,12 @@ function renderTagChoices() {
     };
     tagChoices.appendChild(b);
   }
+  const edit = document.createElement('button');
+  edit.type = 'button';
+  edit.className = 'choice-chip choice-edit';
+  edit.textContent = '🏷 タグを編集';
+  edit.onclick = openTagSheet;
+  tagChoices.appendChild(edit);
 }
 
 f.level.addEventListener('input', updateLevelLabel);
@@ -293,6 +307,89 @@ deleteBtn.addEventListener('click', () => {
   render();
   closeSheet();
 });
+
+// ---------- タグ管理 ----------
+const tagSheet = document.getElementById('tagSheet');
+const tagManageList = document.getElementById('tagManageList');
+const newTagInput = document.getElementById('newTagInput');
+const addTagBtn = document.getElementById('addTagBtn');
+
+function openTagSheet() { renderTagManageList(); tagSheet.hidden = false; }
+function refreshAfterTagChange() {
+  save();
+  render();
+  renderTagManageList();
+  if (!sheet.hidden) renderTagChoices();
+}
+
+function renderTagManageList() {
+  tagManageList.innerHTML = '';
+  const counts = tagUsageCounts();
+  for (const t of tagList()) {
+    const li = document.createElement('li');
+    li.className = 'tag-row';
+    li.innerHTML = `
+      <span class="tag-row-name">${escapeHtml(t)}</span>
+      <span class="tag-row-count">${counts[t] || 0}件</span>
+      <button class="tag-icon" data-act="rename" type="button" aria-label="名前変更">✏️</button>
+      <button class="tag-icon" data-act="delete" type="button" aria-label="削除">🗑️</button>
+    `;
+    li.querySelector('[data-act="rename"]').onclick = () => renameTag(t);
+    li.querySelector('[data-act="delete"]').onclick = () => deleteTag(t);
+    tagManageList.appendChild(li);
+  }
+}
+
+function tagUsageCounts() {
+  const c = {};
+  for (const p of state.pages) for (const it of p.items) for (const t of it.tags) c[t] = (c[t] || 0) + 1;
+  return c;
+}
+
+function addTag(name) {
+  name = (name || '').trim();
+  if (!name) return;
+  if (tagList().includes(name)) { alert('同じ名前のタグが既にあります'); return; }
+  tagList().push(name);
+  newTagInput.value = '';
+  refreshAfterTagChange();
+}
+
+function renameTag(oldName) {
+  const input = prompt('タグ名を変更', oldName);
+  if (input == null) return;
+  const newName = input.trim();
+  if (!newName || newName === oldName) return;
+  // 全アイテムのタグを置換
+  for (const p of state.pages) {
+    for (const it of p.items) {
+      it.tags = [...new Set(it.tags.map((t) => (t === oldName ? newName : t)))];
+    }
+  }
+  // タグ一覧を更新（既存名へのリネームなら統合）
+  const idx = tagList().indexOf(oldName);
+  if (tagList().includes(newName)) tagList().splice(idx, 1);
+  else tagList()[idx] = newName;
+  if (activeTag === oldName) activeTag = tagList().includes(newName) ? newName : null;
+  formTags = [...new Set(formTags.map((t) => (t === oldName ? newName : t)))];
+  refreshAfterTagChange();
+}
+
+function deleteTag(name) {
+  const used = tagUsageCounts()[name] || 0;
+  const msg = used > 0
+    ? `タグ「${name}」を削除しますか？（${used}件のアイテムからも外れます）`
+    : `タグ「${name}」を削除しますか？`;
+  if (!confirm(msg)) return;
+  state.tags = tagList().filter((t) => t !== name);
+  for (const p of state.pages) for (const it of p.items) it.tags = it.tags.filter((t) => t !== name);
+  if (activeTag === name) activeTag = null;
+  formTags = formTags.filter((t) => t !== name);
+  refreshAfterTagChange();
+}
+
+addTagBtn.addEventListener('click', () => addTag(newTagInput.value));
+newTagInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(newTagInput.value); } });
 
 // ---------- ページ管理 ----------
 const pageSheet = document.getElementById('pageSheet');
@@ -392,7 +489,7 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 // 背景 / ハンドルで閉じる
-[sheet, pageSheet].forEach((s) =>
+[sheet, pageSheet, tagSheet].forEach((s) =>
   s.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) s.hidden = true; })
 );
 

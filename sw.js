@@ -1,5 +1,5 @@
 // Service Worker — ネットワーク優先 + オフライン用キャッシュ
-const CACHE = 'stock-v3';
+const CACHE = 'stock-v4';
 const ASSETS = [
   './',
   './index.html',

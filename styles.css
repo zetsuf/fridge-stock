@@ -284,6 +284,33 @@ html, body {
   border-color: var(--primary);
   color: #fff;
 }
+.choice-chip.choice-edit {
+  border-style: dashed;
+  color: var(--primary);
+  font-weight: 700;
+}
+
+/* タグ管理 */
+.tag-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tag-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px 10px;
+}
+.tag-row-name { flex: 1; font-size: 1rem; font-weight: 700; }
+.tag-row-count { font-size: 0.78rem; color: var(--text-soft); }
+.tag-icon {
+  border: none;
+  background: transparent;
+  font-size: 1.05rem;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.tag-icon:active { background: var(--bg); }
 
 /* ヘッダーのページ切替ボタン */
 .page-menu-btn {

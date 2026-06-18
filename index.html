@@ -100,6 +100,21 @@
     </div>
   </div>
 
+  <!-- タグ管理シート -->
+  <div id="tagSheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">タグの管理</h2>
+      <p class="sync-note">タグの追加・名前変更・削除ができます。名前を変えると、そのタグが付いた全アイテムにも反映されます。</p>
+      <ul id="tagManageList" class="tag-list"></ul>
+      <div class="join-row">
+        <input id="newTagInput" type="text" placeholder="新しいタグ名" autocomplete="off" />
+        <button id="addTagBtn" class="btn btn-primary" type="button">追加</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 同期シート -->
   <div id="syncSheet" class="sheet" hidden>
     <div class="sheet-backdrop" data-close></div>
