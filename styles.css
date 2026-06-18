@@ -332,9 +332,41 @@ html, body {
 .recipe-missing strong { color: var(--danger); }
 .recipe-detail { margin-top: 8px; }
 .recipe-detail summary { font-size: 0.85rem; color: var(--primary); cursor: pointer; font-weight: 600; }
-.recipe-steps { margin: 8px 0 4px; padding-left: 20px; font-size: 0.88rem; line-height: 1.7; }
-.recipe-season { font-size: 0.78rem; color: var(--text-soft); margin-top: 4px; }
-.recipe-cook { width: 100%; margin-top: 10px; padding: 11px; }
+.recipe-sub { font-size: 0.8rem; font-weight: 700; color: var(--text-soft); margin: 12px 0 6px; }
+.recipe-steps { margin: 4px 0; padding-left: 20px; font-size: 0.88rem; line-height: 1.8; }
+.recipe-cook { width: 100%; margin-top: 12px; padding: 11px; }
+
+/* 材料リスト */
+.ing-list { list-style: none; margin: 0; padding: 0; font-size: 0.86rem; }
+.ing-list li { display: flex; align-items: baseline; gap: 6px; padding: 3px 0; }
+.ing-mark { width: 1.1em; flex: 0 0 auto; text-align: center; font-weight: 700; }
+.ing-amount { margin-left: auto; color: var(--text-soft); font-size: 0.82rem; white-space: nowrap; padding-left: 8px; }
+.ing-from { color: var(--text-soft); font-size: 0.78rem; }
+.ing-have .ing-mark { color: #16a34a; }
+.ing-miss { color: var(--danger); }
+.ing-miss .ing-mark { color: var(--danger); }
+.ing-season { color: var(--text-soft); }
+
+/* 買い物リスト */
+.shopping-box {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.shopping-title { font-size: 0.82rem; font-weight: 700; color: #c2410c; margin-bottom: 8px; }
+.shopping-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.shopping-tag {
+  background: #fff;
+  border: 1px solid #fdba74;
+  color: #9a3412;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.shopping-tag b { margin-left: 3px; color: #c2410c; }
 
 /* ヘッダーのページ切替ボタン */
 .page-menu-btn {

@@ -400,23 +400,26 @@ const recipeIntro = document.getElementById('recipeIntro');
 // 残量のあるアイテム（level>0）= 使える食材
 function availableItems() { return items().filter((it) => it.level > 0); }
 
-// グループ（同義語配列）を満たすアイテムを返す（部分一致・双方向）
-function findItemForGroup(group, avail, exclude) {
+// 材料（キーワードk）を満たすアイテムを返す（部分一致・双方向）
+function findItemForKeywords(kw, avail, exclude) {
   return avail.find((it) =>
     !exclude.includes(it) &&
-    group.some((kw) => it.name.includes(kw) || kw.includes(it.name))
+    kw.some((w) => it.name.includes(w) || w.includes(it.name))
   );
 }
 
+// レシピを在庫と照合。主材料(k付き)ごとに在庫の有無を判定
 function matchRecipe(recipe, avail) {
   const used = [];
-  const missing = [];
-  for (const group of recipe.need) {
-    const m = findItemForGroup(group, avail, used);
-    if (m) used.push(m);
-    else missing.push(group[0]);
+  const mains = []; // { ing, have, item }
+  const missing = []; // 不足している主材料(ing)
+  for (const ing of recipe.ing) {
+    if (!ing.k) continue; // 調味料はスキップ
+    const m = findItemForKeywords(ing.k, avail, used);
+    if (m) { used.push(m); mains.push({ ing, have: true, item: m }); }
+    else { mains.push({ ing, have: false }); missing.push(ing); }
   }
-  return { ok: missing.length === 0, used, missing, total: recipe.need.length };
+  return { ok: missing.length === 0, used, mains, missing };
 }
 
 function openRecipeSheet() {
@@ -439,7 +442,7 @@ function renderRecipes() {
   for (const r of (window.RECIPES || [])) {
     const m = matchRecipe(r, avail);
     if (m.ok) makeable.push({ r, m });
-    else if (m.missing.length <= 2 && m.used.length >= 1) almost.push({ r, m });
+    else if (m.missing.length <= 2 && m.mains.some((x) => x.have)) almost.push({ r, m });
   }
   almost.sort((a, b) => a.m.missing.length - b.m.missing.length);
 
@@ -448,14 +451,35 @@ function renderRecipes() {
     return;
   }
 
+  const shown = almost.slice(0, 8);
+
   if (makeable.length) {
     recipeBody.appendChild(sectionTitle(`✅ いま作れる（${makeable.length}品）`));
     makeable.forEach(({ r, m }) => recipeBody.appendChild(recipeCard(r, m, true)));
   }
-  if (almost.length) {
-    recipeBody.appendChild(sectionTitle('🛒 あと少しで作れる'));
-    almost.slice(0, 6).forEach(({ r, m }) => recipeBody.appendChild(recipeCard(r, m, false)));
+  if (shown.length) {
+    recipeBody.appendChild(sectionTitle('🍳 あと少しで作れる'));
+    recipeBody.appendChild(shoppingList(shown));
+    shown.forEach(({ r, m }) => recipeBody.appendChild(recipeCard(r, m, false)));
   }
+}
+
+// 不足食材を集約した買い物リスト
+function shoppingList(almost) {
+  const counts = {};
+  for (const { m } of almost) {
+    for (const ing of m.missing) counts[ing.n] = (counts[ing.n] || 0) + 1;
+  }
+  const sorted = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  const box = document.createElement('div');
+  box.className = 'shopping-box';
+  box.innerHTML = `
+    <div class="shopping-title">🛒 買い物リスト（これがあると作れる料理が増えます）</div>
+    <div class="shopping-tags">
+      ${sorted.map((n) => `<span class="shopping-tag">${escapeHtml(n)}${counts[n] > 1 ? `<b>×${counts[n]}</b>` : ''}</span>`).join('')}
+    </div>
+  `;
+  return box;
 }
 
 function sectionTitle(text) {
@@ -468,11 +492,21 @@ function sectionTitle(text) {
 function recipeCard(r, m, makeable) {
   const div = document.createElement('div');
   div.className = 'recipe-card' + (makeable ? '' : ' dim');
-  const uses = m.used.map((it) => escapeHtml(it.name)).join('、');
-  const missing = m.missing.map((x) => escapeHtml(x)).join('、');
+  const missing = m.missing.map((x) => escapeHtml(x.n)).join('、');
   const stepsHtml = r.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('');
-  const seasonHtml = r.season && r.season.length
-    ? `<div class="recipe-season">調味料: ${r.season.map(escapeHtml).join('、')}</div>` : '';
+
+  // 材料リスト（主材料は在庫の有無を ✓/✗ で、調味料は ・ で表示）
+  const ingHtml = r.ing.map((ing) => {
+    if (!ing.k) {
+      return `<li class="ing-season"><span class="ing-mark">・</span>${escapeHtml(ing.n)}<span class="ing-amount">${escapeHtml(ing.a)}</span></li>`;
+    }
+    const mi = m.mains.find((x) => x.ing === ing);
+    const have = mi && mi.have;
+    const cls = have ? 'ing-have' : 'ing-miss';
+    const mark = have ? '✓' : '✗';
+    const note = have ? `<span class="ing-from">(${escapeHtml(mi.item.name)})</span>` : '';
+    return `<li class="${cls}"><span class="ing-mark">${mark}</span>${escapeHtml(ing.n)}<span class="ing-amount">${escapeHtml(ing.a)}</span>${note}</li>`;
+  }).join('');
 
   div.innerHTML = `
     <div class="recipe-head">
@@ -481,12 +515,14 @@ function recipeCard(r, m, makeable) {
       <span class="recipe-time">${escapeHtml(r.time)}</span>
     </div>
     ${makeable
-      ? `<div class="recipe-uses">使う: ${uses}</div>`
+      ? '<div class="recipe-uses">✅ 今ある食材で作れます</div>'
       : `<div class="recipe-missing">あと: <strong>${missing}</strong></div>`}
     <details class="recipe-detail">
-      <summary>作り方を見る</summary>
+      <summary>材料・作り方を見る</summary>
+      <div class="recipe-sub">材料（${escapeHtml(r.servings)}）</div>
+      <ul class="ing-list">${ingHtml}</ul>
+      <div class="recipe-sub">作り方</div>
       <ol class="recipe-steps">${stepsHtml}</ol>
-      ${seasonHtml}
     </details>
     ${makeable ? '<button class="btn btn-primary recipe-cook" type="button">作った（材料を消費）</button>' : ''}
   `;
