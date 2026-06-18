@@ -8,7 +8,7 @@ function levelLabel(v) { return LEVELS[v] ?? '未使用'; }
 function levelColor(v) { return ['#cbd5e1', '#f97316', '#f59e0b', '#34d399', '#22c55e'][v] ?? '#22c55e'; }
 
 // 選べるタグは固定6種
-const TAGS = ['野菜', '肉', '調味料', '酒', '氷', 'その他'];
+const TAGS = ['野菜', '肉', '調味料', '酒', '冷凍', 'その他'];
 
 /** @typedef {{id:string,name:string,level:number,tags:string[],lastUsed:number|null,createdAt:number}} Item */
 /** @typedef {{id:string,name:string,items:Item[]}} Page */
@@ -25,6 +25,7 @@ function loadState() {
     const raw = JSON.parse(localStorage.getItem(STORE_KEY));
     if (raw && Array.isArray(raw.pages) && raw.pages.length) {
       if (!raw.pages.find((p) => p.id === raw.activePageId)) raw.activePageId = raw.pages[0].id;
+      normalizeTags(raw); // 旧タグ「氷」→「冷凍」
       return raw;
     }
   } catch {}
@@ -47,6 +48,15 @@ function migrate() {
   const pid = uid();
   const st = { version: 2, pages: [{ id: pid, name: 'れいぞうこ', items }], activePageId: pid };
   return st;
+}
+
+function normalizeTags(st) {
+  const RENAME = { '氷': '冷凍' };
+  for (const p of st.pages) {
+    for (const it of p.items) {
+      it.tags = [...new Set((it.tags || []).map((t) => RENAME[t] || t))];
+    }
+  }
 }
 
 function saveLocal() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
