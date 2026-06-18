@@ -1,10 +1,12 @@
 // Service Worker — ネットワーク優先 + オフライン用キャッシュ
-const CACHE = 'stock-v2';
+const CACHE = 'stock-v3';
 const ASSETS = [
   './',
   './index.html',
   './styles.css',
   './app.js',
+  './sync.js',
+  './firebase-config.js',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png',

@@ -49,7 +49,21 @@ function migrate() {
   return st;
 }
 
-function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function saveLocal() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function save() {
+  saveLocal();
+  if (window.Sync && window.Sync.isConnected()) window.Sync.push(state);
+}
+
+// 同期相手（他端末）からの更新を反映
+function applyRemote(remote) {
+  if (!remote || !Array.isArray(remote.pages) || !remote.pages.length) return;
+  state = remote;
+  if (!state.pages.find((p) => p.id === state.activePageId)) state.activePageId = state.pages[0].id;
+  saveLocal(); // ローカル保存のみ（push し返さない）
+  render();
+  if (typeof renderPageList === 'function' && !pageSheet.hidden) renderPageList();
+}
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function activePage() { return state.pages.find((p) => p.id === state.activePageId) || state.pages[0]; }
 function items() { return activePage().items; }
@@ -372,6 +386,78 @@ window.addEventListener('scroll', () => {
   s.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) s.hidden = true; })
 );
 
+// ---------- 同期UI ----------
+const syncSheet = document.getElementById('syncSheet');
+const syncBtn = document.getElementById('syncBtn');
+const syncEls = {
+  noConfig: document.getElementById('syncNoConfig'),
+  disconnected: document.getElementById('syncDisconnected'),
+  connected: document.getElementById('syncConnected'),
+  codeText: document.getElementById('syncCodeText'),
+  createBtn: document.getElementById('createCodeBtn'),
+  joinInput: document.getElementById('joinInput'),
+  joinBtn: document.getElementById('joinBtn'),
+  copyBtn: document.getElementById('copyCodeBtn'),
+  disconnectBtn: document.getElementById('disconnectBtn'),
+  error: document.getElementById('syncError'),
+};
+
+function openSyncSheet() { renderSyncSheet(); syncSheet.hidden = false; }
+function renderSyncSheet() {
+  const configured = window.Sync && window.Sync.isConfigured();
+  const connected = window.Sync && window.Sync.isConnected();
+  syncEls.error.hidden = true;
+  syncEls.noConfig.hidden = configured;
+  syncEls.disconnected.hidden = !configured || connected;
+  syncEls.connected.hidden = !configured || !connected;
+  syncBtn.classList.toggle('syncing', !!connected);
+  if (connected) syncEls.codeText.textContent = window.Sync.getCode();
+}
+function syncError(msg) { syncEls.error.textContent = msg; syncEls.error.hidden = false; }
+
+syncBtn.addEventListener('click', openSyncSheet);
+
+syncEls.createBtn.addEventListener('click', async () => {
+  try {
+    syncEls.createBtn.disabled = true;
+    await window.Sync.createCode(state);
+    renderSyncSheet();
+  } catch (e) { syncError(e.message || '作成に失敗しました'); }
+  finally { syncEls.createBtn.disabled = false; }
+});
+
+syncEls.joinBtn.addEventListener('click', async () => {
+  const code = syncEls.joinInput.value;
+  if (!code.trim()) { syncError('コードを入力してください'); return; }
+  if (!confirm('この端末の現在のデータは、同期先の内容に置き換わります。続けますか？')) return;
+  try {
+    syncEls.joinBtn.disabled = true;
+    const remote = await window.Sync.joinCode(code);
+    applyRemote(remote);
+    syncEls.joinInput.value = '';
+    renderSyncSheet();
+  } catch (e) { syncError(e.message || '参加に失敗しました'); }
+  finally { syncEls.joinBtn.disabled = false; }
+});
+
+syncEls.copyBtn.addEventListener('click', async () => {
+  const code = window.Sync.getCode();
+  try { await navigator.clipboard.writeText(code); syncEls.copyBtn.textContent = 'コピーしました ✓'; }
+  catch { syncEls.copyBtn.textContent = code; }
+  setTimeout(() => { syncEls.copyBtn.textContent = 'コードをコピー'; }, 1500);
+});
+
+syncEls.disconnectBtn.addEventListener('click', () => {
+  if (!confirm('この端末の同期を解除しますか？（データは端末に残ります）')) return;
+  window.Sync.disconnect();
+  renderSyncSheet();
+});
+
+[syncSheet].forEach((s) =>
+  s.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) s.hidden = true; })
+);
+
 // ---------- 初期化 ----------
-save();
+saveLocal();
 render();
+if (window.Sync) window.Sync.init(applyRemote);

@@ -345,3 +345,39 @@ html, body {
 .btn-primary { background: var(--primary); color: #fff; }
 .btn-primary:active { background: var(--primary-dark); }
 .btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); flex: 0 0 auto; padding: 14px 20px; }
+
+/* ヘッダー右側のアクション群 */
+.header-actions { display: flex; align-items: center; gap: 2px; }
+.icon-btn.syncing { color: var(--primary); }
+
+/* 同期シート */
+.sync-note { font-size: 0.9rem; color: var(--text-soft); line-height: 1.6; margin: 0 0 16px; }
+#syncDisconnected .btn, #syncConnected .btn { width: 100%; margin-bottom: 12px; }
+.btn-outline { background: var(--surface); color: var(--primary); border: 1px solid var(--primary); flex: 0 0 auto; padding: 12px 18px; }
+.btn-danger-full { background: #fff; color: var(--danger); border: 1px solid var(--danger); width: 100%; }
+.sync-divider { display: flex; align-items: center; gap: 10px; color: var(--text-soft); font-size: 0.8rem; margin: 4px 0 14px; }
+.sync-divider::before, .sync-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.join-row { display: flex; gap: 10px; }
+.join-row input {
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 1rem;
+  outline: none;
+  text-transform: uppercase;
+}
+.join-row input:focus { border-color: var(--primary); }
+.sync-code {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-align: center;
+  background: var(--chip);
+  color: var(--chip-text);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 14px;
+  user-select: all;
+}
+.sync-error { color: var(--danger); font-size: 0.85rem; margin: 4px 0 0; }
