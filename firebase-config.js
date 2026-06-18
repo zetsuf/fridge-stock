@@ -1,14 +1,11 @@
 // === Firebase 設定 ===
-// Firebase コンソールの「ウェブアプリ」設定からコピーした firebaseConfig を
-// 下の null と差し替えてください（これらは公開してよい情報です）。
-//
-// 例:
-// window.FIREBASE_CONFIG = {
-//   apiKey: "AIza...",
-//   authDomain: "your-project.firebaseapp.com",
-//   projectId: "your-project",
-//   storageBucket: "your-project.appspot.com",
-//   messagingSenderId: "1234567890",
-//   appId: "1:1234567890:web:abcdef"
-// };
-window.FIREBASE_CONFIG = null;
+// Firebase コンソールの「ウェブアプリ」設定からコピーした firebaseConfig。
+// これらはクライアントに埋め込んで良い公開情報です。
+window.FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAHH-XxNU1QVKlZ6bPH9mPoHYb1OaTOVuE",
+  authDomain: "reizoko-b25f8.firebaseapp.com",
+  projectId: "reizoko-b25f8",
+  storageBucket: "reizoko-b25f8.firebasestorage.app",
+  messagingSenderId: "166057060994",
+  appId: "1:166057060994:web:f083ec99216a5cffef229b"
+};
