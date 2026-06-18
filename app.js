@@ -1,27 +1,58 @@
-// ===== 冷蔵庫の在庫 — データ層 & UI =====
-const STORE_KEY = 'fridge-stock.items.v1';
+// ===== 在庫管理（複数ページ対応） =====
+const STORE_KEY = 'stock.v2';
+const LEGACY_KEY = 'fridge-stock.items.v1';
 
-/** @typedef {{id:string,name:string,qty:number,unit:string,tags:string[],lastUsed:number|null,createdAt:number}} Item */
+// 残量レベル: 0=なし 〜 4=未使用
+const LEVELS = ['なし', '後わずか', '半分', 'ほぼ新品', '未使用'];
+function levelLabel(v) { return LEVELS[v] ?? '未使用'; }
+function levelColor(v) { return ['#cbd5e1', '#f97316', '#f59e0b', '#34d399', '#22c55e'][v] ?? '#22c55e'; }
 
-/** @type {Item[]} */
-let items = load();
-let activeTag = null;     // タグフィルタ
-let query = '';           // 検索文字列
+// 選べるタグは固定6種
+const TAGS = ['野菜', '肉', '調味料', '酒', '氷', 'その他'];
 
-// ---------- 永続化 ----------
-function load() {
+/** @typedef {{id:string,name:string,level:number,tags:string[],lastUsed:number|null,createdAt:number}} Item */
+/** @typedef {{id:string,name:string,items:Item[]}} Page */
+
+let state = loadState();
+let activeTag = null;
+let query = '';
+let formTags = [];      // 編集中アイテムの選択タグ
+let editingUsed = false; // 「使った」経由で開いたか
+
+// ---------- 永続化 / 移行 ----------
+function loadState() {
   try {
-    return JSON.parse(localStorage.getItem(STORE_KEY)) || [];
-  } catch {
-    return [];
-  }
+    const raw = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (raw && Array.isArray(raw.pages) && raw.pages.length) {
+      if (!raw.pages.find((p) => p.id === raw.activePageId)) raw.activePageId = raw.pages[0].id;
+      return raw;
+    }
+  } catch {}
+  return migrate();
 }
-function save() {
-  localStorage.setItem(STORE_KEY, JSON.stringify(items));
+
+function migrate() {
+  let items = [];
+  try {
+    const old = JSON.parse(localStorage.getItem(LEGACY_KEY)) || [];
+    items = old.map((o) => ({
+      id: o.id || uid(),
+      name: o.name,
+      level: 4,
+      tags: (o.tags || []).filter((t) => TAGS.includes(t)),
+      lastUsed: o.lastUsed || null,
+      createdAt: o.createdAt || Date.now(),
+    }));
+  } catch {}
+  const pid = uid();
+  const st = { version: 2, pages: [{ id: pid, name: 'れいぞうこ', items }], activePageId: pid };
+  return st;
 }
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-}
+
+function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+function activePage() { return state.pages.find((p) => p.id === state.activePageId) || state.pages[0]; }
+function items() { return activePage().items; }
 
 // ---------- 相対日付 ----------
 function relativeDate(ts) {
@@ -33,59 +64,57 @@ function relativeDate(ts) {
   if (days < 30) return `${Math.floor(days / 7)}週間前`;
   return `${Math.floor(days / 30)}ヶ月前`;
 }
-function startOfDay(ts) {
-  const d = new Date(ts);
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
-}
+function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
 
-// ---------- 描画 ----------
+// ---------- 要素 ----------
 const el = {
   list: document.getElementById('itemList'),
   empty: document.getElementById('emptyState'),
   tagFilter: document.getElementById('tagFilter'),
+  pageName: document.getElementById('pageName'),
 };
 
-function allTags() {
+function usedTags() {
   const set = new Set();
-  items.forEach((it) => it.tags.forEach((t) => set.add(t)));
-  return [...set].sort();
+  items().forEach((it) => it.tags.forEach((t) => set.add(t)));
+  return TAGS.filter((t) => set.has(t));
 }
 
 function visibleItems() {
   const q = query.trim().toLowerCase();
-  return items
+  return items()
     .filter((it) => !activeTag || it.tags.includes(activeTag))
     .filter((it) => {
       if (!q) return true;
-      return (
-        it.name.toLowerCase().includes(q) ||
-        it.tags.some((t) => t.toLowerCase().includes(q))
-      );
+      return it.name.toLowerCase().includes(q) || it.tags.some((t) => t.toLowerCase().includes(q));
     })
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
+// ---------- 描画 ----------
 function render() {
+  el.pageName.textContent = activePage().name;
   renderTagFilter();
+
   const list = visibleItems();
   el.list.innerHTML = '';
 
-  if (items.length === 0) {
-    el.empty.hidden = false;
-    el.empty.querySelector('.empty-title').textContent = 'まだアイテムがありません';
-    el.empty.querySelector('.empty-sub').innerHTML = '右下の <strong>＋</strong> から追加しましょう';
+  if (items().length === 0) {
+    showEmpty('まだアイテムがありません', '右下の <strong>＋</strong> から追加しましょう');
     return;
   }
   if (list.length === 0) {
-    el.empty.hidden = false;
-    el.empty.querySelector('.empty-title').textContent = '該当するアイテムがありません';
-    el.empty.querySelector('.empty-sub').textContent = '検索・タグを変えてみてください';
+    showEmpty('該当するアイテムがありません', '検索・タグを変えてみてください');
     return;
   }
   el.empty.hidden = true;
-
   for (const it of list) el.list.appendChild(card(it));
+}
+
+function showEmpty(title, sub) {
+  el.empty.hidden = false;
+  el.empty.querySelector('.empty-title').textContent = title;
+  el.empty.querySelector('.empty-sub').innerHTML = sub;
 }
 
 function card(it) {
@@ -93,12 +122,16 @@ function card(it) {
   li.className = 'item-card';
 
   const stale = it.lastUsed && Date.now() - it.lastUsed > 7 * 86400000;
+  const color = levelColor(it.level);
   const tagsHtml = it.tags.map((t) => `<span class="chip">${escapeHtml(t)}</span>`).join('');
+  const bars = [4, 3, 2, 1]
+    .map((lvl) => `<span class="bar" style="background:${it.level >= lvl ? color : 'var(--border)'}"></span>`)
+    .join('');
 
   li.innerHTML = `
-    <div class="item-qty">
-      <span class="qty-num">${formatQty(it.qty)}</span>
-      <span class="qty-unit">${escapeHtml(it.unit || '')}</span>
+    <div class="item-gauge">
+      <div class="gauge-bars">${bars}</div>
+      <span class="gauge-label" style="color:${color}">${levelLabel(it.level)}</span>
     </div>
     <div class="item-main">
       <p class="item-name">${escapeHtml(it.name)}</p>
@@ -108,21 +141,20 @@ function card(it) {
       </div>
     </div>
     <div class="item-actions">
-      <button class="round-btn use-btn" data-act="use">使った</button>
+      <button class="use-btn" data-act="use">使った</button>
     </div>
   `;
 
-  // タップで編集（ボタン以外）
   li.addEventListener('click', (e) => {
     if (e.target.closest('[data-act]')) return;
-    openSheet(it);
+    openSheet(it, false);
   });
-  li.querySelector('[data-act="use"]').addEventListener('click', () => useItem(it.id));
+  li.querySelector('[data-act="use"]').addEventListener('click', () => openSheet(it, true));
   return li;
 }
 
 function renderTagFilter() {
-  const tags = allTags();
+  const tags = usedTags();
   el.tagFilter.innerHTML = '';
   if (tags.length === 0) return;
 
@@ -141,108 +173,87 @@ function renderTagFilter() {
   }
 }
 
-function formatQty(n) {
-  return Number.isInteger(n) ? String(n) : n.toFixed(1);
-}
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ));
 }
 
-// ---------- アクション ----------
-function useItem(id) {
-  const it = items.find((x) => x.id === id);
-  if (!it) return;
-  it.lastUsed = Date.now();
-  if (it.qty > 0) it.qty = Math.max(0, +(it.qty - 1).toFixed(2));
-  save();
-  render();
-}
-
-// ---------- モーダル ----------
+// ---------- アイテム編集シート ----------
 const sheet = document.getElementById('sheet');
 const form = document.getElementById('itemForm');
 const f = {
   id: document.getElementById('fId'),
   name: document.getElementById('fName'),
-  qty: document.getElementById('fQty'),
-  unit: document.getElementById('fUnit'),
-  tags: document.getElementById('fTags'),
+  level: document.getElementById('fLevel'),
 };
 const sheetTitle = document.getElementById('sheetTitle');
 const deleteBtn = document.getElementById('deleteBtn');
-const tagSuggest = document.getElementById('tagSuggest');
+const levelLabelEl = document.getElementById('levelLabel');
+const tagChoices = document.getElementById('tagChoices');
 
-function openSheet(item) {
+function openSheet(item, used) {
+  editingUsed = !!used;
   if (item) {
-    sheetTitle.textContent = 'アイテムを編集';
+    sheetTitle.textContent = used ? '使った（残量を更新）' : 'アイテムを編集';
     f.id.value = item.id;
     f.name.value = item.name;
-    f.qty.value = item.qty;
-    f.unit.value = item.unit;
-    f.tags.value = item.tags.join(', ');
+    f.level.value = item.level;
+    formTags = item.tags.slice();
     deleteBtn.hidden = false;
   } else {
     sheetTitle.textContent = 'アイテムを追加';
-    form.reset();
     f.id.value = '';
-    f.qty.value = 1;
+    f.name.value = '';
+    f.level.value = 4;
+    formTags = [];
     deleteBtn.hidden = true;
   }
-  renderTagSuggest();
+  updateLevelLabel();
+  renderTagChoices();
   sheet.hidden = false;
-  setTimeout(() => f.name.focus(), 80);
+  // 名称欄への自動フォーカスはしない。「使った」時はスライダーへ。
+  if (used) setTimeout(() => f.level.focus(), 80);
 }
-function closeSheet() {
-  sheet.hidden = true;
+function closeSheet() { sheet.hidden = true; }
+
+function updateLevelLabel() {
+  const v = parseInt(f.level.value, 10);
+  levelLabelEl.textContent = levelLabel(v);
+  levelLabelEl.style.color = levelColor(v);
 }
 
-function renderTagSuggest() {
-  const current = parseTags(f.tags.value);
-  const tags = allTags().filter((t) => !current.includes(t));
-  tagSuggest.innerHTML = '';
-  for (const t of tags.slice(0, 12)) {
+function renderTagChoices() {
+  tagChoices.innerHTML = '';
+  for (const t of TAGS) {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'suggest-chip';
-    b.textContent = '+ ' + t;
+    b.className = 'choice-chip' + (formTags.includes(t) ? ' selected' : '');
+    b.textContent = t;
     b.onclick = () => {
-      const list = parseTags(f.tags.value);
-      list.push(t);
-      f.tags.value = list.join(', ');
-      renderTagSuggest();
+      if (formTags.includes(t)) formTags = formTags.filter((x) => x !== t);
+      else formTags.push(t);
+      renderTagChoices();
     };
-    tagSuggest.appendChild(b);
+    tagChoices.appendChild(b);
   }
 }
 
-function parseTags(str) {
-  return [...new Set(
-    String(str)
-      .split(/[,，\s]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
-  )];
-}
+f.level.addEventListener('input', updateLevelLabel);
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
   const name = f.name.value.trim();
   if (!name) return;
-  const data = {
-    name,
-    qty: Math.max(0, parseFloat(f.qty.value) || 0),
-    unit: f.unit.value.trim(),
-    tags: parseTags(f.tags.value),
-  };
+  const data = { name, level: parseInt(f.level.value, 10), tags: formTags.slice() };
 
   const id = f.id.value;
   if (id) {
-    const it = items.find((x) => x.id === id);
+    const it = items().find((x) => x.id === id);
     Object.assign(it, data);
+    if (editingUsed) it.lastUsed = Date.now();
   } else {
-    items.push({ id: uid(), ...data, lastUsed: null, createdAt: Date.now() });
+    items().push({ id: uid(), ...data, lastUsed: null, createdAt: Date.now() });
   }
   save();
   render();
@@ -253,26 +264,85 @@ deleteBtn.addEventListener('click', () => {
   const id = f.id.value;
   if (!id) return;
   if (!confirm('このアイテムを削除しますか？')) return;
-  items = items.filter((x) => x.id !== id);
+  activePage().items = items().filter((x) => x.id !== id);
   save();
   render();
   closeSheet();
 });
 
-// 数量ステッパー
-document.querySelectorAll('.qty-btn').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    const step = parseInt(btn.dataset.step, 10);
-    const next = Math.max(0, (parseFloat(f.qty.value) || 0) + step);
-    f.qty.value = next;
-  });
-});
+// ---------- ページ管理 ----------
+const pageSheet = document.getElementById('pageSheet');
+const pageMenuBtn = document.getElementById('pageMenuBtn');
+const pageList = document.getElementById('pageList');
+const addPageBtn = document.getElementById('addPageBtn');
 
-f.tags.addEventListener('input', renderTagSuggest);
+pageMenuBtn.addEventListener('click', openPageSheet);
+function openPageSheet() { renderPageList(); pageSheet.hidden = false; }
+function closePageSheet() { pageSheet.hidden = true; }
 
-// 背景 / ハンドルで閉じる
-sheet.addEventListener('click', (e) => {
-  if (e.target.matches('[data-close]')) closeSheet();
+function renderPageList() {
+  pageList.innerHTML = '';
+  for (const p of state.pages) {
+    const li = document.createElement('li');
+    li.className = 'page-row' + (p.id === state.activePageId ? ' active' : '');
+    li.innerHTML = `
+      <button class="page-switch" type="button">
+        <span class="page-row-name">${escapeHtml(p.name)}</span>
+        <span class="page-row-count">${p.items.length}件</span>
+      </button>
+      <button class="page-icon" data-act="rename" type="button" aria-label="名前変更">✏️</button>
+      ${state.pages.length > 1 ? '<button class="page-icon" data-act="delete" type="button" aria-label="削除">🗑️</button>' : ''}
+    `;
+    li.querySelector('.page-switch').onclick = () => switchPage(p.id);
+    li.querySelector('[data-act="rename"]').onclick = () => renamePage(p.id);
+    const del = li.querySelector('[data-act="delete"]');
+    if (del) del.onclick = () => deletePage(p.id);
+    pageList.appendChild(li);
+  }
+}
+
+function switchPage(id) {
+  state.activePageId = id;
+  activeTag = null;
+  query = '';
+  searchBar.hidden = true;
+  searchInput.value = '';
+  save();
+  render();
+  closePageSheet();
+}
+
+function renamePage(id) {
+  const p = state.pages.find((x) => x.id === id);
+  const name = prompt('ページの名前', p.name);
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  p.name = trimmed;
+  save();
+  render();
+  renderPageList();
+}
+
+function deletePage(id) {
+  const p = state.pages.find((x) => x.id === id);
+  if (state.pages.length <= 1) return;
+  if (!confirm(`ページ「${p.name}」を中のアイテムごと削除しますか？`)) return;
+  state.pages = state.pages.filter((x) => x.id !== id);
+  if (state.activePageId === id) state.activePageId = state.pages[0].id;
+  save();
+  render();
+  renderPageList();
+}
+
+addPageBtn.addEventListener('click', () => {
+  const name = prompt('新しいページの名前（例：冷凍庫、パントリー、薬箱）');
+  if (name == null) return;
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  const pid = uid();
+  state.pages.push({ id: pid, name: trimmed, items: [] });
+  switchPage(pid);
 });
 
 // ---------- 検索 ----------
@@ -288,9 +358,8 @@ searchInput.addEventListener('input', () => { query = searchInput.value; render(
 
 // ---------- FAB ----------
 const fab = document.getElementById('fab');
-fab.addEventListener('click', () => openSheet(null));
+fab.addEventListener('click', () => openSheet(null, false));
 
-// スクロール中は隠れ、停止で再出現
 let scrollTimer = null;
 window.addEventListener('scroll', () => {
   fab.classList.add('hidden');
@@ -298,10 +367,11 @@ window.addEventListener('scroll', () => {
   scrollTimer = setTimeout(() => fab.classList.remove('hidden'), 220);
 }, { passive: true });
 
-// ---------- 初期描画 ----------
-render();
+// 背景 / ハンドルで閉じる
+[sheet, pageSheet].forEach((s) =>
+  s.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) s.hidden = true; })
+);
 
-// 初回のみサンプルデータを投入（任意・空のとき）
-if (items.length === 0 && !localStorage.getItem('fridge-stock.seeded')) {
-  localStorage.setItem('fridge-stock.seeded', '1');
-}
+// ---------- 初期化 ----------
+save();
+render();

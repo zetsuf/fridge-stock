@@ -130,43 +130,36 @@ html, body {
 .item-meta .dot { opacity: 0.5; }
 .meta-stale { color: var(--danger); font-weight: 600; }
 
-.item-qty {
+/* 残量ゲージ（カード左） */
+.item-gauge {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  min-width: 56px;
+  gap: 4px;
+  min-width: 52px;
 }
-.qty-num { font-size: 1.4rem; font-weight: 800; line-height: 1; }
-.qty-unit { font-size: 0.7rem; color: var(--text-soft); }
+.gauge-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 16px;
+}
+.gauge-bars .bar { height: 7px; border-radius: 2px; }
+.gauge-label { font-size: 0.72rem; font-weight: 700; white-space: nowrap; }
 
 .item-actions { display: flex; flex-direction: column; gap: 8px; }
-.round-btn {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.round-btn:active { transform: scale(0.92); }
 .use-btn {
+  border: none;
   background: var(--primary);
-  border-color: var(--primary);
   color: #fff;
-  font-size: 0.72rem;
+  font-size: 0.78rem;
   font-weight: 700;
   border-radius: 12px;
-  width: auto;
-  padding: 0 12px;
-  height: 38px;
+  padding: 0 14px;
+  height: 40px;
+  cursor: pointer;
 }
+.use-btn:active { background: var(--primary-dark); transform: scale(0.95); }
 
 /* ---------- Empty ---------- */
 .empty-state { text-align: center; padding: 60px 20px; color: var(--text-soft); }
@@ -237,30 +230,107 @@ html, body {
 }
 .field input:focus { border-color: var(--primary); }
 
-.qty-editor { display: flex; align-items: center; gap: 10px; }
-.qty-btn {
-  width: 44px; height: 44px; flex: 0 0 auto;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  font-size: 1.3rem; font-weight: 700;
-  cursor: pointer;
-}
-.qty-btn:active { background: var(--border); }
-#fQty { width: 70px; text-align: center; }
-.unit-input { flex: 1; }
-
-.tag-suggest { display: flex; flex-wrap: wrap; gap: 6px; }
-.tag-suggest:empty { display: none; }
-.suggest-chip {
-  background: var(--chip);
-  color: var(--chip-text);
-  border: none;
+/* 残量スライダー */
+.level-display { text-align: center; }
+.level-label { font-size: 1.5rem; font-weight: 800; }
+.level-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 8px;
   border-radius: 999px;
-  padding: 5px 12px;
-  font-size: 0.8rem;
+  background: linear-gradient(90deg, #cbd5e1, #f59e0b, #22c55e);
+  outline: none;
+  margin: 4px 0 2px;
+}
+.level-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--primary);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25);
   cursor: pointer;
 }
+.level-slider::-moz-range-thumb {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid var(--primary);
+  cursor: pointer;
+}
+.level-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: var(--text-soft);
+}
+
+/* タグ選択（固定6種） */
+.tag-choices { display: flex; flex-wrap: wrap; gap: 8px; }
+.choice-chip {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-soft);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.choice-chip.selected {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+
+/* ヘッダーのページ切替ボタン */
+.page-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  border: none;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  color: var(--text);
+}
+.page-menu-btn .caret { color: var(--text-soft); }
+
+/* ページ一覧 */
+.page-list { list-style: none; margin: 0 0 16px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.page-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 4px 8px 4px 4px;
+}
+.page-row.active { border-color: var(--primary); background: var(--chip); }
+.page-switch {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  padding: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+.page-row-name { font-size: 1rem; font-weight: 700; color: var(--text); }
+.page-row-count { font-size: 0.78rem; color: var(--text-soft); }
+.page-icon {
+  border: none;
+  background: transparent;
+  font-size: 1.1rem;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.page-icon:active { background: var(--bg); }
 
 .form-actions { display: flex; gap: 12px; margin-top: 4px; }
 .btn {

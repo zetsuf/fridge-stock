@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#2563eb" />
-  <title>冷蔵庫の在庫</title>
+  <title>在庫管理</title>
 
   <!-- PWA -->
   <link rel="manifest" href="manifest.webmanifest" />
@@ -13,14 +13,17 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-  <meta name="apple-mobile-web-app-title" content="冷蔵庫在庫" />
+  <meta name="apple-mobile-web-app-title" content="在庫管理" />
 
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="app-header">
     <div class="header-inner">
-      <h1 class="app-title">冷蔵庫の在庫</h1>
+      <button id="pageMenuBtn" class="page-menu-btn" aria-label="ページを切り替え">
+        <span id="pageName" class="app-title">れいぞうこ</span>
+        <svg class="caret" viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M7 10l5 5 5-5Z"/></svg>
+      </button>
       <button id="searchToggle" class="icon-btn" aria-label="検索">
         <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 1 0-.7.7l.27.28v.79l5 4.99L20.49 19l-4.99-5Zm-6 0A4.5 4.5 0 1 1 14 9.5 4.5 4.5 0 0 1 9.5 14Z"/></svg>
       </button>
@@ -44,7 +47,7 @@
     <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2Z"/></svg>
   </button>
 
-  <!-- 追加 / 編集モーダル -->
+  <!-- 追加 / 編集シート -->
   <div id="sheet" class="sheet" hidden>
     <div class="sheet-backdrop" data-close></div>
     <div class="sheet-panel" role="dialog" aria-modal="true">
@@ -57,20 +60,20 @@
         </label>
 
         <div class="field">
-          <span class="field-label">数量</span>
-          <div class="qty-editor">
-            <button type="button" class="qty-btn" data-step="-1">−</button>
-            <input id="fQty" type="number" inputmode="decimal" min="0" step="1" value="1" />
-            <button type="button" class="qty-btn" data-step="1">＋</button>
-            <input id="fUnit" type="text" class="unit-input" placeholder="単位(個/本…)" autocomplete="off" />
+          <span class="field-label">残量</span>
+          <div class="level-display">
+            <span id="levelLabel" class="level-label">未使用</span>
+          </div>
+          <input id="fLevel" class="level-slider" type="range" min="0" max="4" step="1" value="4" />
+          <div class="level-ticks">
+            <span>なし</span><span>わずか</span><span>半分</span><span>ほぼ</span><span>未使用</span>
           </div>
         </div>
 
-        <label class="field">
-          <span class="field-label">タグ（カンマ・スペース区切り）</span>
-          <input id="fTags" type="text" placeholder="例）野菜, 飲み物" autocomplete="off" />
-          <div id="tagSuggest" class="tag-suggest"></div>
-        </label>
+        <div class="field">
+          <span class="field-label">タグ</span>
+          <div id="tagChoices" class="tag-choices"></div>
+        </div>
 
         <input type="hidden" id="fId" />
         <div class="form-actions">
@@ -78,6 +81,17 @@
           <button type="submit" class="btn btn-primary">保存</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ページ管理シート -->
+  <div id="pageSheet" class="sheet" hidden>
+    <div class="sheet-backdrop" data-close></div>
+    <div class="sheet-panel" role="dialog" aria-modal="true">
+      <div class="sheet-handle"></div>
+      <h2 class="sheet-title">在庫ページ</h2>
+      <ul id="pageList" class="page-list"></ul>
+      <button id="addPageBtn" class="btn btn-primary" type="button">＋ 新しいページを追加</button>
     </div>
   </div>
 

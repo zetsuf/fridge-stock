@@ -1,5 +1,5 @@
-// Service Worker — オフライン対応 & ホーム画面アプリ化用
-const CACHE = 'fridge-stock-v1';
+// Service Worker — ネットワーク優先 + オフライン用キャッシュ
+const CACHE = 'stock-v2';
 const ASSETS = [
   './',
   './index.html',
@@ -24,18 +24,16 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+// オンライン時は常に最新を取得、失敗時のみキャッシュへフォールバック
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const network = fetch(e.request)
-        .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
-          return res;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(e.request)
+      .then((res) => {
+        const copy = res.clone();
+        caches.open(CACHE).then((c) => c.put(e.request, copy)).catch(() => {});
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });
