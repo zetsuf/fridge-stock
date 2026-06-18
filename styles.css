@@ -312,6 +312,30 @@ html, body {
 }
 .tag-icon:active { background: var(--bg); }
 
+/* レシピ */
+.recipe-section { font-size: 0.95rem; font-weight: 700; margin: 18px 0 10px; }
+.recipe-section:first-child { margin-top: 4px; }
+.recipe-empty { color: var(--text-soft); font-size: 0.9rem; text-align: center; padding: 24px 0; }
+.recipe-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.recipe-card.dim { background: var(--bg); }
+.recipe-head { display: flex; align-items: center; gap: 8px; }
+.recipe-emoji { font-size: 1.3rem; }
+.recipe-name { flex: 1; font-size: 1.02rem; font-weight: 700; }
+.recipe-time { font-size: 0.78rem; color: var(--text-soft); }
+.recipe-uses { font-size: 0.82rem; color: var(--text-soft); margin-top: 6px; }
+.recipe-missing { font-size: 0.82rem; color: var(--text-soft); margin-top: 6px; }
+.recipe-missing strong { color: var(--danger); }
+.recipe-detail { margin-top: 8px; }
+.recipe-detail summary { font-size: 0.85rem; color: var(--primary); cursor: pointer; font-weight: 600; }
+.recipe-steps { margin: 8px 0 4px; padding-left: 20px; font-size: 0.88rem; line-height: 1.7; }
+.recipe-season { font-size: 0.78rem; color: var(--text-soft); margin-top: 4px; }
+.recipe-cook { width: 100%; margin-top: 10px; padding: 11px; }
+
 /* ヘッダーのページ切替ボタン */
 .page-menu-btn {
   display: inline-flex;

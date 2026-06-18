@@ -391,6 +391,127 @@ function deleteTag(name) {
 addTagBtn.addEventListener('click', () => addTag(newTagInput.value));
 newTagInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addTag(newTagInput.value); } });
 
+// ---------- レシピ提案 ----------
+const recipeSheet = document.getElementById('recipeSheet');
+const recipeBtn = document.getElementById('recipeBtn');
+const recipeBody = document.getElementById('recipeBody');
+const recipeIntro = document.getElementById('recipeIntro');
+
+// 残量のあるアイテム（level>0）= 使える食材
+function availableItems() { return items().filter((it) => it.level > 0); }
+
+// グループ（同義語配列）を満たすアイテムを返す（部分一致・双方向）
+function findItemForGroup(group, avail, exclude) {
+  return avail.find((it) =>
+    !exclude.includes(it) &&
+    group.some((kw) => it.name.includes(kw) || kw.includes(it.name))
+  );
+}
+
+function matchRecipe(recipe, avail) {
+  const used = [];
+  const missing = [];
+  for (const group of recipe.need) {
+    const m = findItemForGroup(group, avail, used);
+    if (m) used.push(m);
+    else missing.push(group[0]);
+  }
+  return { ok: missing.length === 0, used, missing, total: recipe.need.length };
+}
+
+function openRecipeSheet() {
+  renderRecipes();
+  recipeSheet.hidden = false;
+}
+
+function renderRecipes() {
+  const avail = availableItems();
+  recipeIntro.textContent = `「${activePage().name}」の使える食材${avail.length}品から、作れる料理を探しました。`;
+  recipeBody.innerHTML = '';
+
+  if (avail.length === 0) {
+    recipeBody.innerHTML = '<p class="recipe-empty">残量のある食材がありません。アイテムを追加するか、残量を増やしてください。</p>';
+    return;
+  }
+
+  const makeable = [];
+  const almost = [];
+  for (const r of (window.RECIPES || [])) {
+    const m = matchRecipe(r, avail);
+    if (m.ok) makeable.push({ r, m });
+    else if (m.missing.length <= 2 && m.used.length >= 1) almost.push({ r, m });
+  }
+  almost.sort((a, b) => a.m.missing.length - b.m.missing.length);
+
+  if (makeable.length === 0 && almost.length === 0) {
+    recipeBody.innerHTML = '<p class="recipe-empty">今ある食材で作れるレシピが見つかりませんでした。食材を増やすと候補が出ます。</p>';
+    return;
+  }
+
+  if (makeable.length) {
+    recipeBody.appendChild(sectionTitle(`✅ いま作れる（${makeable.length}品）`));
+    makeable.forEach(({ r, m }) => recipeBody.appendChild(recipeCard(r, m, true)));
+  }
+  if (almost.length) {
+    recipeBody.appendChild(sectionTitle('🛒 あと少しで作れる'));
+    almost.slice(0, 6).forEach(({ r, m }) => recipeBody.appendChild(recipeCard(r, m, false)));
+  }
+}
+
+function sectionTitle(text) {
+  const h = document.createElement('h3');
+  h.className = 'recipe-section';
+  h.textContent = text;
+  return h;
+}
+
+function recipeCard(r, m, makeable) {
+  const div = document.createElement('div');
+  div.className = 'recipe-card' + (makeable ? '' : ' dim');
+  const uses = m.used.map((it) => escapeHtml(it.name)).join('、');
+  const missing = m.missing.map((x) => escapeHtml(x)).join('、');
+  const stepsHtml = r.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join('');
+  const seasonHtml = r.season && r.season.length
+    ? `<div class="recipe-season">調味料: ${r.season.map(escapeHtml).join('、')}</div>` : '';
+
+  div.innerHTML = `
+    <div class="recipe-head">
+      <span class="recipe-emoji">${r.emoji}</span>
+      <span class="recipe-name">${escapeHtml(r.name)}</span>
+      <span class="recipe-time">${escapeHtml(r.time)}</span>
+    </div>
+    ${makeable
+      ? `<div class="recipe-uses">使う: ${uses}</div>`
+      : `<div class="recipe-missing">あと: <strong>${missing}</strong></div>`}
+    <details class="recipe-detail">
+      <summary>作り方を見る</summary>
+      <ol class="recipe-steps">${stepsHtml}</ol>
+      ${seasonHtml}
+    </details>
+    ${makeable ? '<button class="btn btn-primary recipe-cook" type="button">作った（材料を消費）</button>' : ''}
+  `;
+
+  if (makeable) {
+    div.querySelector('.recipe-cook').addEventListener('click', () => cookRecipe(m.used));
+  }
+  return div;
+}
+
+// 「作った」: 使った食材の残量を1段階減らし、最終使用日を更新
+function cookRecipe(usedItems) {
+  if (!confirm('使った材料の残量を1ずつ減らします。よろしいですか？')) return;
+  for (const it of usedItems) {
+    if (it.level > 0) it.level -= 1;
+    it.lastUsed = Date.now();
+  }
+  save();
+  render();
+  renderRecipes();
+}
+
+recipeBtn.addEventListener('click', openRecipeSheet);
+recipeSheet.addEventListener('click', (e) => { if (e.target.matches('[data-close]')) recipeSheet.hidden = true; });
+
 // ---------- ページ管理 ----------
 const pageSheet = document.getElementById('pageSheet');
 const pageMenuBtn = document.getElementById('pageMenuBtn');
