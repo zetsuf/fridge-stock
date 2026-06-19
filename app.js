@@ -8,7 +8,10 @@ function levelLabel(v) { return LEVELS[v] ?? '未使用'; }
 function levelColor(v) { return ['#cbd5e1', '#f97316', '#f59e0b', '#34d399', '#22c55e'][v] ?? '#22c55e'; }
 
 // タグの初期値（以降はユーザーが「タグ管理」で自由に編集）
-const DEFAULT_TAGS = ['野菜', '肉', '調味料', '酒', '冷凍', 'その他'];
+// 緊急度の高い 肉・卵 を先頭に
+const DEFAULT_TAGS = ['肉', '卵', '野菜', '調味料', '酒', '冷凍', 'その他'];
+// 先頭に固定したいタグ（無ければ追加）
+const PRIORITY_TAGS = ['肉', '卵'];
 function tagList() {
   if (!Array.isArray(state.tags) || !state.tags.length) state.tags = DEFAULT_TAGS.slice();
   return state.tags;
@@ -54,11 +57,20 @@ function migrate() {
   return st;
 }
 
-// データ形を整える（タグ一覧の初期化 + 旧タグ「氷」→「冷凍」）
+// データ形を整える（タグ一覧の初期化 + 旧タグ「氷」→「冷凍」 + 肉・卵の優先並び）
 function ensureShape(st) {
   const RENAME = { '氷': '冷凍' };
   if (!Array.isArray(st.tags) || !st.tags.length) st.tags = DEFAULT_TAGS.slice();
   st.tags = [...new Set(st.tags.map((t) => RENAME[t] || t))];
+  // 一度だけ：緊急度の高い 肉・卵 を先頭へ（卵が無ければ追加）
+  if (!st.tagPriorityApplied) {
+    for (const t of [...PRIORITY_TAGS].reverse()) {
+      const idx = st.tags.indexOf(t);
+      if (idx !== -1) st.tags.splice(idx, 1);
+      st.tags.unshift(t);
+    }
+    st.tagPriorityApplied = true;
+  }
   for (const p of st.pages) {
     for (const it of p.items) {
       it.tags = [...new Set((it.tags || []).map((t) => RENAME[t] || t))];
