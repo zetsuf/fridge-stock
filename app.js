@@ -536,25 +536,9 @@ function recipeCard(r, m, makeable) {
       <div class="recipe-sub">作り方</div>
       <ol class="recipe-steps">${stepsHtml}</ol>
     </details>
-    ${makeable ? '<button class="btn btn-primary recipe-cook" type="button">作った（材料を消費）</button>' : ''}
   `;
 
-  if (makeable) {
-    div.querySelector('.recipe-cook').addEventListener('click', () => cookRecipe(m.used));
-  }
   return div;
-}
-
-// 「作った」: 使った食材の残量を1段階減らし、最終使用日を更新
-function cookRecipe(usedItems) {
-  if (!confirm('使った材料の残量を1ずつ減らします。よろしいですか？')) return;
-  for (const it of usedItems) {
-    if (it.level > 0) it.level -= 1;
-    it.lastUsed = Date.now();
-  }
-  save();
-  render();
-  renderRecipes();
 }
 
 recipeBtn.addEventListener('click', openRecipeSheet);
