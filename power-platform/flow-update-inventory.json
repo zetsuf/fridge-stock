@@ -1,0 +1,220 @@
+{
+  "_metadata": {
+    "name": "UpdateInventory",
+    "displayName": "在庫自動更新",
+    "description": "入出庫履歴に新しいアイテムが追加されたとき、在庫マスタを自動更新するフロー",
+    "trigger": "SharePoint - 項目が作成されたとき (TransactionHistory)",
+    "setupGuide": "以下の手順でPower Automateに手動作成してください"
+  },
+  "setupSteps": [
+    {
+      "step": 1,
+      "action": "フロー作成",
+      "detail": "Power Automate → マイフロー → + 新しいフロー → 自動化したクラウドフロー → 「SharePoint - 項目が作成されたとき」を選択"
+    },
+    {
+      "step": 2,
+      "action": "トリガー設定",
+      "detail": "サイトのアドレス: [SharePointサイトURL] / リスト名: TransactionHistory"
+    },
+    {
+      "step": 3,
+      "action": "「複数の項目の取得」を追加",
+      "detail": "SharePoint「複数の項目の取得」アクション → サイト: 同上 / リスト: InventoryMaster",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "InventoryMaster",
+        "filterQuery": "Title eq '@{triggerOutputs()?['body/Title']}'",
+        "topCount": 1
+      }
+    },
+    {
+      "step": 4,
+      "action": "条件分岐: マスタに既存レコードがあるか",
+      "detail": "「条件」アクション → length(body('複数の項目の取得')?['value']) is greater than 0"
+    },
+    {
+      "step": 5,
+      "action": "はいの場合 — 条件分岐: 入庫か出庫か",
+      "detail": "「はいの場合」内に「条件」→ triggerOutputs()?['body/TransactionType/Value'] is equal to '入庫'"
+    },
+    {
+      "step": 6,
+      "action": "入庫の場合 — 項目の更新",
+      "detail": "「はい（入庫）の場合」内に「SharePoint - 項目の更新」を追加",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "InventoryMaster",
+        "id": "@{first(body('複数の項目の取得')?['value'])?['ID']}",
+        "Title": "@{triggerOutputs()?['body/Title']}",
+        "CurrentStock": "@{add(first(body('複数の項目の取得')?['value'])?['CurrentStock'], triggerOutputs()?['body/Quantity'])}",
+        "LastUpdated": "@{utcNow()}"
+      }
+    },
+    {
+      "step": 7,
+      "action": "出庫の場合 — 項目の更新",
+      "detail": "「いいえ（出庫）の場合」内に「SharePoint - 項目の更新」を追加",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "InventoryMaster",
+        "id": "@{first(body('複数の項目の取得')?['value'])?['ID']}",
+        "Title": "@{triggerOutputs()?['body/Title']}",
+        "CurrentStock": "@{sub(first(body('複数の項目の取得')?['value'])?['CurrentStock'], triggerOutputs()?['body/Quantity'])}",
+        "LastUpdated": "@{utcNow()}"
+      }
+    },
+    {
+      "step": 8,
+      "action": "いいえの場合（マスタ未登録） — 新規作成",
+      "detail": "Step 4 の「いいえの場合」に「SharePoint - 項目の作成」を追加（入庫時のみ新規作成）",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "InventoryMaster",
+        "Title": "@{triggerOutputs()?['body/Title']}",
+        "BookTitle": "@{triggerOutputs()?['body/BookTitle']}",
+        "CurrentStock": "@{triggerOutputs()?['body/Quantity']}",
+        "LastUpdated": "@{utcNow()}"
+      },
+      "note": "出庫なのにマスタが無い場合はエラー。この場合はスキップするか通知を出す"
+    }
+  ],
+  "flowDefinition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "When_an_item_is_created": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('TransactionHistory'))}/onnewitems"
+        },
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 1
+        }
+      }
+    },
+    "actions": {
+      "Get_existing_inventory": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('InventoryMaster'))}/items",
+          "queries": {
+            "$filter": "Title eq '@{triggerOutputs()?['body/Title']}'",
+            "$top": 1
+          }
+        },
+        "runAfter": {}
+      },
+      "Check_existing": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(body('Get_existing_inventory')?['value'])",
+            0
+          ]
+        },
+        "actions": {
+          "Check_transaction_type": {
+            "type": "If",
+            "expression": {
+              "equals": [
+                "@triggerOutputs()?['body/TransactionType/Value']",
+                "入庫"
+              ]
+            },
+            "actions": {
+              "Update_stock_add": {
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+                    }
+                  },
+                  "method": "patch",
+                  "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('InventoryMaster'))}/items/@{first(body('Get_existing_inventory')?['value'])?['ID']}",
+                  "body": {
+                    "CurrentStock": "@{add(int(first(body('Get_existing_inventory')?['value'])?['CurrentStock']), int(triggerOutputs()?['body/Quantity']))}",
+                    "LastUpdated": "@{utcNow()}"
+                  }
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Update_stock_subtract": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+                      }
+                    },
+                    "method": "patch",
+                    "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('InventoryMaster'))}/items/@{first(body('Get_existing_inventory')?['value'])?['ID']}",
+                    "body": {
+                      "CurrentStock": "@{sub(int(first(body('Get_existing_inventory')?['value'])?['CurrentStock']), int(triggerOutputs()?['body/Quantity']))}",
+                      "LastUpdated": "@{utcNow()}"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Check_if_receiving": {
+              "type": "If",
+              "expression": {
+                "equals": [
+                  "@triggerOutputs()?['body/TransactionType/Value']",
+                  "入庫"
+                ]
+              },
+              "actions": {
+                "Create_new_inventory": {
+                  "type": "ApiConnection",
+                  "inputs": {
+                    "host": {
+                      "connection": {
+                        "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+                      }
+                    },
+                    "method": "post",
+                    "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('InventoryMaster'))}/items",
+                    "body": {
+                      "Title": "@{triggerOutputs()?['body/Title']}",
+                      "BookTitle": "@{triggerOutputs()?['body/BookTitle']}",
+                      "CurrentStock": "@{triggerOutputs()?['body/Quantity']}",
+                      "LastUpdated": "@{utcNow()}"
+                    }
+                  }
+                }
+              },
+              "else": {
+                "actions": {}
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Get_existing_inventory": ["Succeeded"]
+        }
+      }
+    }
+  }
+}

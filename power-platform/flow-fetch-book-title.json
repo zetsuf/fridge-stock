@@ -1,0 +1,229 @@
+{
+  "_metadata": {
+    "name": "FetchBookTitle",
+    "displayName": "書名自動取得",
+    "description": "ISBNコードからOpenBD APIで書名を自動取得するフロー",
+    "trigger": "Power Apps (V2)",
+    "setupGuide": "以下の手順でPower Automateに手動作成してください"
+  },
+  "setupSteps": [
+    {
+      "step": 1,
+      "action": "フロー作成",
+      "detail": "Power Automate → マイフロー → + 新しいフロー → インスタントクラウドフロー → 「Power Apps (V2)」トリガーを選択"
+    },
+    {
+      "step": 2,
+      "action": "トリガー入力の追加",
+      "detail": "Power Apps (V2) トリガーで「+ 入力の追加」→「テキスト」→ 名前: isbn"
+    },
+    {
+      "step": 3,
+      "action": "HTTP アクション追加",
+      "detail": "「+ 新しいステップ」→「HTTP」を検索して追加",
+      "config": {
+        "method": "GET",
+        "uri": "https://api.openbd.jp/v1/get?isbn=@{triggerBody()['text']}"
+      },
+      "note": "HTTP コネクタはPremiumコネクタです。使えない場合は Step 3B を参照"
+    },
+    {
+      "step": "3B",
+      "action": "（代替）HTTPコネクタが使えない場合",
+      "detail": "Office Script または カスタムコネクタ で代替可能。最も簡単な代替は書名を手入力にすること（このフロー自体を省略）"
+    },
+    {
+      "step": 4,
+      "action": "JSON の解析",
+      "detail": "「+ 新しいステップ」→「データ操作 - JSON の解析」を追加",
+      "config": {
+        "content": "@body('HTTP')",
+        "schema": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "isbn": { "type": "string" },
+                  "title": { "type": "string" },
+                  "author": { "type": "string" },
+                  "publisher": { "type": "string" }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 5,
+      "action": "条件分岐",
+      "detail": "「+ 新しいステップ」→「条件」を追加",
+      "config": {
+        "condition": "body('JSON_の解析')?[0] is not equal to null"
+      }
+    },
+    {
+      "step": 6,
+      "action": "はいの場合 — 変数の初期化",
+      "detail": "「はいの場合」ブロック内に「変数を初期化する」を追加",
+      "config": {
+        "name": "bookTitle",
+        "type": "String",
+        "value": "@{body('JSON_の解析')?[0]?['summary']?['title']}"
+      }
+    },
+    {
+      "step": 7,
+      "action": "いいえの場合 — 変数の設定",
+      "detail": "「いいえの場合」ブロック内に「変数の設定」を追加",
+      "config": {
+        "name": "bookTitle",
+        "type": "String",
+        "value": ""
+      },
+      "note": "変数の初期化はフローの最上位に移動する必要があるため、Step 6を条件分岐の前に配置し、「はいの場合」では「変数の設定」を使う"
+    },
+    {
+      "step": 8,
+      "action": "Power Apps への応答",
+      "detail": "条件分岐の後に「Power Apps または Flow に応答する」を追加",
+      "config": {
+        "outputs": {
+          "booktitle": {
+            "type": "Text",
+            "value": "@{variables('bookTitle')}"
+          }
+        }
+      }
+    }
+  ],
+  "flowDefinition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "PowerApp",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "title": "isbn",
+                "type": "string",
+                "x-ms-dynamically-added": true,
+                "description": "ISBNコード（13桁）",
+                "x-ms-content-hint": "TEXT"
+              }
+            },
+            "required": ["text"]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Init_bookTitle": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "bookTitle",
+              "type": "string",
+              "value": ""
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "HTTP_OpenBD": {
+        "type": "Http",
+        "inputs": {
+          "method": "GET",
+          "uri": "https://api.openbd.jp/v1/get?isbn=@{triggerBody()['text']}"
+        },
+        "runAfter": {
+          "Init_bookTitle": ["Succeeded"]
+        }
+      },
+      "Parse_JSON": {
+        "type": "ParseJson",
+        "inputs": {
+          "content": "@body('HTTP_OpenBD')",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": ["object", "null"],
+              "properties": {
+                "summary": {
+                  "type": "object",
+                  "properties": {
+                    "isbn": { "type": "string" },
+                    "title": { "type": "string" },
+                    "author": { "type": "string" },
+                    "publisher": { "type": "string" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "HTTP_OpenBD": ["Succeeded"]
+        }
+      },
+      "Check_Result": {
+        "type": "If",
+        "expression": {
+          "and": [
+            {
+              "not": {
+                "equals": ["@body('Parse_JSON')?[0]", null]
+              }
+            }
+          ]
+        },
+        "actions": {
+          "Set_bookTitle": {
+            "type": "SetVariable",
+            "inputs": {
+              "name": "bookTitle",
+              "value": "@{body('Parse_JSON')?[0]?['summary']?['title']}"
+            }
+          }
+        },
+        "else": {
+          "actions": {}
+        },
+        "runAfter": {
+          "Parse_JSON": ["Succeeded"]
+        }
+      },
+      "Respond_to_PowerApps": {
+        "type": "Response",
+        "kind": "PowerApp",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "booktitle": "@{variables('bookTitle')}"
+          },
+          "schema": {
+            "type": "object",
+            "properties": {
+              "booktitle": {
+                "title": "booktitle",
+                "type": "string",
+                "x-ms-content-hint": "TEXT"
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Check_Result": ["Succeeded"]
+        }
+      }
+    }
+  }
+}

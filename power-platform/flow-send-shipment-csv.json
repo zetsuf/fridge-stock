@@ -1,0 +1,358 @@
+{
+  "_metadata": {
+    "name": "SendShipmentCSV",
+    "displayName": "出庫CSV送信",
+    "description": "未送信の出庫データをCSVファイルにして配信先リストのメールアドレスに送信するフロー",
+    "trigger": "Power Apps (V2)",
+    "setupGuide": "以下の手順でPower Automateに手動作成してください"
+  },
+  "setupSteps": [
+    {
+      "step": 1,
+      "action": "フロー作成",
+      "detail": "Power Automate → マイフロー → + 新しいフロー → インスタントクラウドフロー → 「Power Apps (V2)」トリガーを選択（入力パラメータは不要）"
+    },
+    {
+      "step": 2,
+      "action": "変数の初期化: csvContent",
+      "detail": "「変数を初期化する」アクション → 名前: csvContent / 種類: 文字列 / 値: ISBN,書名,冊数,登録日時",
+      "config": {
+        "name": "csvContent",
+        "type": "string",
+        "value": "ISBN,書名,冊数,登録日時"
+      }
+    },
+    {
+      "step": 3,
+      "action": "変数の初期化: sentCount",
+      "detail": "「変数を初期化する」アクション → 名前: sentCount / 種類: 整数 / 値: 0",
+      "config": {
+        "name": "sentCount",
+        "type": "integer",
+        "value": 0
+      }
+    },
+    {
+      "step": 4,
+      "action": "未送信出庫データの取得",
+      "detail": "「SharePoint - 複数の項目の取得」→ リスト: TransactionHistory",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "TransactionHistory",
+        "filterQuery": "TransactionType eq '出庫' and IsSent eq 0",
+        "orderBy": "TransactionDate asc",
+        "topCount": 5000
+      }
+    },
+    {
+      "step": 5,
+      "action": "条件: 未送信データがあるか",
+      "detail": "「条件」→ length(body('複数の項目の取得')?['value']) is greater than 0"
+    },
+    {
+      "step": 6,
+      "action": "はいの場合 — Apply to each（CSV行生成）",
+      "detail": "「はいの場合」内に「Apply to each」→ 出力: body('複数の項目の取得')?['value']",
+      "innerActions": [
+        {
+          "action": "文字列変数に追加",
+          "detail": "「文字列変数に追加」→ 名前: csvContent",
+          "config": {
+            "name": "csvContent",
+            "value": "\n@{items('Apply_to_each')?['Title']},@{items('Apply_to_each')?['BookTitle']},@{items('Apply_to_each')?['Quantity']},@{formatDateTime(items('Apply_to_each')?['TransactionDate'], 'yyyy/MM/dd HH:mm')}"
+          }
+        },
+        {
+          "action": "整数変数の値を増やす",
+          "detail": "「変数の値を増やす」→ 名前: sentCount / 値: 1"
+        },
+        {
+          "action": "項目の更新（送信済みフラグ）",
+          "detail": "「SharePoint - 項目の更新」→ IsSent を true に更新",
+          "config": {
+            "siteAddress": "[SharePointサイトURL]",
+            "listName": "TransactionHistory",
+            "id": "@{items('Apply_to_each')?['ID']}",
+            "IsSent": true
+          }
+        }
+      ]
+    },
+    {
+      "step": 7,
+      "action": "配信先リストの取得",
+      "detail": "Apply to each の後に「SharePoint - 複数の項目の取得」→ リスト: Recipients",
+      "config": {
+        "siteAddress": "[SharePointサイトURL]",
+        "listName": "Recipients"
+      }
+    },
+    {
+      "step": 8,
+      "action": "メールアドレスの結合",
+      "detail": "「データ操作 - 選択」アクション → From: body('配信先リスト取得')?['value'] / Map: item()?['Email']　→ 次に「データ操作 - 結合」→ 区切り文字: ; "
+    },
+    {
+      "step": 9,
+      "action": "メール送信",
+      "detail": "「Office 365 Outlook - メールの送信 (V2)」を追加",
+      "config": {
+        "to": "@{body('結合')}",
+        "subject": "【出庫報告】@{formatDateTime(utcNow(), 'yyyy/MM/dd')} 出庫データ（@{variables('sentCount')}件）",
+        "body": "<p>出庫データを送信します。</p><p>送信件数: @{variables('sentCount')} 件</p><p>添付のCSVファイルをご確認ください。</p>",
+        "importance": "Normal",
+        "attachments": [
+          {
+            "name": "出庫データ_@{formatDateTime(utcNow(), 'yyyyMMdd_HHmm')}.csv",
+            "contentBytes": "@{base64(concat(decodeUriComponent('%EF%BB%BF'), variables('csvContent')))}"
+          }
+        ]
+      },
+      "note": "BOMつきUTF-8でCSVを生成するため、先頭にBOM (EF BB BF) を付与。Excelで文字化けしない。"
+    },
+    {
+      "step": 10,
+      "action": "Power Apps への応答",
+      "detail": "条件分岐の後に「Power Apps または Flow に応答する」を追加",
+      "config": {
+        "outputs": {
+          "sentcount": {
+            "type": "Text",
+            "value": "@{variables('sentCount')}"
+          }
+        }
+      },
+      "note": "「いいえの場合（未送信データなし）」にも同じ応答を配置し、sentcount: 0 を返す"
+    }
+  ],
+  "flowDefinition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "PowerApp",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {},
+            "required": []
+          }
+        }
+      }
+    },
+    "actions": {
+      "Init_csvContent": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "csvContent",
+              "type": "string",
+              "value": "ISBN,書名,冊数,登録日時"
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Init_sentCount": {
+        "type": "InitializeVariable",
+        "inputs": {
+          "variables": [
+            {
+              "name": "sentCount",
+              "type": "integer",
+              "value": 0
+            }
+          ]
+        },
+        "runAfter": {}
+      },
+      "Get_unsent_shipments": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('TransactionHistory'))}/items",
+          "queries": {
+            "$filter": "TransactionType eq '出庫' and IsSent eq 0",
+            "$orderby": "TransactionDate asc",
+            "$top": 5000
+          }
+        },
+        "runAfter": {
+          "Init_csvContent": ["Succeeded"],
+          "Init_sentCount": ["Succeeded"]
+        }
+      },
+      "Check_has_data": {
+        "type": "If",
+        "expression": {
+          "greater": [
+            "@length(body('Get_unsent_shipments')?['value'])",
+            0
+          ]
+        },
+        "actions": {
+          "Loop_shipments": {
+            "type": "Foreach",
+            "foreach": "@body('Get_unsent_shipments')?['value']",
+            "actions": {
+              "Append_csv_line": {
+                "type": "AppendToStringVariable",
+                "inputs": {
+                  "name": "csvContent",
+                  "value": "\n@{items('Loop_shipments')?['Title']},@{items('Loop_shipments')?['BookTitle']},@{items('Loop_shipments')?['Quantity']},@{formatDateTime(items('Loop_shipments')?['TransactionDate'], 'yyyy/MM/dd HH:mm')}"
+                }
+              },
+              "Increment_count": {
+                "type": "IncrementVariable",
+                "inputs": {
+                  "name": "sentCount",
+                  "value": 1
+                },
+                "runAfter": {
+                  "Append_csv_line": ["Succeeded"]
+                }
+              },
+              "Update_sent_flag": {
+                "type": "ApiConnection",
+                "inputs": {
+                  "host": {
+                    "connection": {
+                      "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+                    }
+                  },
+                  "method": "patch",
+                  "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('TransactionHistory'))}/items/@{items('Loop_shipments')?['ID']}",
+                  "body": {
+                    "IsSent": true
+                  }
+                },
+                "runAfter": {
+                  "Increment_count": ["Succeeded"]
+                }
+              }
+            }
+          },
+          "Get_recipients": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['shared_sharepointonline']['connectionId']"
+                }
+              },
+              "method": "get",
+              "path": "/datasets/@{encodeURIComponent(encodeURIComponent('[SharePointSiteURL]'))}/tables/@{encodeURIComponent(encodeURIComponent('Recipients'))}/items"
+            },
+            "runAfter": {
+              "Loop_shipments": ["Succeeded"]
+            }
+          },
+          "Select_emails": {
+            "type": "Select",
+            "inputs": {
+              "from": "@body('Get_recipients')?['value']",
+              "select": "@item()?['Email']"
+            },
+            "runAfter": {
+              "Get_recipients": ["Succeeded"]
+            }
+          },
+          "Join_emails": {
+            "type": "Join",
+            "inputs": {
+              "from": "@body('Select_emails')",
+              "joinWith": ";"
+            },
+            "runAfter": {
+              "Select_emails": ["Succeeded"]
+            }
+          },
+          "Send_email": {
+            "type": "ApiConnection",
+            "inputs": {
+              "host": {
+                "connection": {
+                  "name": "@parameters('$connections')['shared_office365']['connectionId']"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail",
+              "body": {
+                "To": "@{body('Join_emails')}",
+                "Subject": "【出庫報告】@{formatDateTime(utcNow(), 'yyyy/MM/dd')} 出庫データ（@{variables('sentCount')}件）",
+                "Body": "<p>出庫データを送信します。</p><p>送信件数: @{variables('sentCount')} 件</p><p>添付のCSVファイルをご確認ください。</p>",
+                "Importance": "Normal",
+                "Attachments": [
+                  {
+                    "Name": "出庫データ_@{formatDateTime(utcNow(), 'yyyyMMdd_HHmm')}.csv",
+                    "ContentBytes": "@{base64(concat(decodeUriComponent('%EF%BB%BF'), variables('csvContent')))}"
+                  }
+                ]
+              }
+            },
+            "runAfter": {
+              "Join_emails": ["Succeeded"]
+            }
+          },
+          "Respond_success": {
+            "type": "Response",
+            "kind": "PowerApp",
+            "inputs": {
+              "statusCode": 200,
+              "body": {
+                "sentcount": "@{variables('sentCount')}"
+              },
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "sentcount": {
+                    "title": "sentcount",
+                    "type": "string",
+                    "x-ms-content-hint": "TEXT"
+                  }
+                }
+              }
+            },
+            "runAfter": {
+              "Send_email": ["Succeeded"]
+            }
+          }
+        },
+        "else": {
+          "actions": {
+            "Respond_no_data": {
+              "type": "Response",
+              "kind": "PowerApp",
+              "inputs": {
+                "statusCode": 200,
+                "body": {
+                  "sentcount": "0"
+                },
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "sentcount": {
+                      "title": "sentcount",
+                      "type": "string",
+                      "x-ms-content-hint": "TEXT"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "runAfter": {
+          "Get_unsent_shipments": ["Succeeded"]
+        }
+      }
+    }
+  }
+}

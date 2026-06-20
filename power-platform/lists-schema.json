@@ -1,0 +1,147 @@
+{
+  "lists": [
+    {
+      "name": "InventoryMaster",
+      "displayName": "在庫マスタ",
+      "description": "書籍の現在庫数を管理するマスタリスト",
+      "columns": [
+        {
+          "internalName": "Title",
+          "displayName": "ISBN",
+          "type": "Text",
+          "required": true,
+          "indexed": true,
+          "enforceUniqueValues": true,
+          "description": "ISBNコード（ハイフンなし13桁）"
+        },
+        {
+          "internalName": "BookTitle",
+          "displayName": "書名",
+          "type": "Text",
+          "required": true,
+          "maxLength": 255,
+          "description": "書籍タイトル"
+        },
+        {
+          "internalName": "CurrentStock",
+          "displayName": "現在庫数",
+          "type": "Number",
+          "required": true,
+          "defaultValue": 0,
+          "minimumValue": 0,
+          "decimalPlaces": 0,
+          "description": "現在の在庫冊数"
+        },
+        {
+          "internalName": "LastUpdated",
+          "displayName": "最終更新日時",
+          "type": "DateTime",
+          "required": false,
+          "dateTimeFormat": "DateTime",
+          "description": "最後に入出庫が行われた日時"
+        }
+      ],
+      "views": [
+        {
+          "name": "すべてのアイテム",
+          "columns": ["Title", "BookTitle", "CurrentStock", "LastUpdated"],
+          "sortBy": "LastUpdated",
+          "sortDirection": "Descending"
+        }
+      ]
+    },
+    {
+      "name": "TransactionHistory",
+      "displayName": "入出庫履歴",
+      "description": "入庫・出庫の履歴を記録するリスト",
+      "columns": [
+        {
+          "internalName": "Title",
+          "displayName": "ISBN",
+          "type": "Text",
+          "required": true,
+          "indexed": true,
+          "description": "ISBNコード（ハイフンなし13桁）"
+        },
+        {
+          "internalName": "BookTitle",
+          "displayName": "書名",
+          "type": "Text",
+          "required": true,
+          "maxLength": 255,
+          "description": "書籍タイトル"
+        },
+        {
+          "internalName": "TransactionType",
+          "displayName": "種別",
+          "type": "Choice",
+          "required": true,
+          "choices": ["入庫", "出庫"],
+          "defaultValue": "入庫",
+          "description": "入庫または出庫"
+        },
+        {
+          "internalName": "Quantity",
+          "displayName": "冊数",
+          "type": "Number",
+          "required": true,
+          "minimumValue": 1,
+          "decimalPlaces": 0,
+          "description": "処理冊数"
+        },
+        {
+          "internalName": "TransactionDate",
+          "displayName": "登録日時",
+          "type": "DateTime",
+          "required": true,
+          "dateTimeFormat": "DateTime",
+          "description": "登録日時"
+        },
+        {
+          "internalName": "IsSent",
+          "displayName": "送信済み",
+          "type": "Boolean",
+          "required": false,
+          "defaultValue": false,
+          "description": "出庫メール送信済みフラグ"
+        }
+      ],
+      "views": [
+        {
+          "name": "すべてのアイテム",
+          "columns": ["Title", "BookTitle", "TransactionType", "Quantity", "TransactionDate", "IsSent"],
+          "sortBy": "TransactionDate",
+          "sortDirection": "Descending"
+        },
+        {
+          "name": "未送信の出庫",
+          "columns": ["Title", "BookTitle", "Quantity", "TransactionDate"],
+          "filter": "TransactionType eq '出庫' AND IsSent eq false",
+          "sortBy": "TransactionDate",
+          "sortDirection": "Ascending"
+        }
+      ]
+    },
+    {
+      "name": "Recipients",
+      "displayName": "配信先",
+      "description": "出庫CSV送信先のメールアドレスを管理するリスト",
+      "columns": [
+        {
+          "internalName": "Title",
+          "displayName": "氏名",
+          "type": "Text",
+          "required": true,
+          "description": "宛先の氏名"
+        },
+        {
+          "internalName": "Email",
+          "displayName": "メールアドレス",
+          "type": "Text",
+          "required": true,
+          "description": "送信先メールアドレス"
+        }
+      ]
+    }
+  ]
+}
