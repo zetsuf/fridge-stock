@@ -74,6 +74,8 @@ function ensureShape(st) {
   for (const p of st.pages) {
     for (const it of p.items) {
       it.tags = [...new Set((it.tags || []).map((t) => RENAME[t] || t))];
+      // 更新時刻が無い既存アイテムは、最終使用 or 作成日時を流用
+      if (it.updatedAt == null) it.updatedAt = it.lastUsed || it.createdAt || 0;
     }
   }
 }
@@ -110,6 +112,17 @@ function relativeDate(ts) {
 }
 function startOfDay(ts) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
 
+// ---------- 本日更新 ----------
+const TODAY_FILTER = '__today__';
+function isToday(ts) { return !!ts && startOfDay(ts) === startOfDay(Date.now()); }
+function todayItems() {
+  return items().filter((it) => isToday(it.updatedAt)).sort((a, b) => b.updatedAt - a.updatedAt);
+}
+function formatTime(ts) {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 // ---------- 要素 ----------
 const el = {
   list: document.getElementById('itemList'),
@@ -127,18 +140,22 @@ function usedTags() {
 function visibleItems() {
   const q = query.trim().toLowerCase();
   return items()
-    .filter((it) => !activeTag || it.tags.includes(activeTag))
+    .filter((it) => {
+      if (activeTag === TODAY_FILTER) return isToday(it.updatedAt);
+      return !activeTag || it.tags.includes(activeTag);
+    })
     .filter((it) => {
       if (!q) return true;
       return it.name.toLowerCase().includes(q) || it.tags.some((t) => t.toLowerCase().includes(q));
     })
-    .sort((a, b) => b.createdAt - a.createdAt);
+    .sort((a, b) => (activeTag === TODAY_FILTER ? b.updatedAt - a.updatedAt : b.createdAt - a.createdAt));
 }
 
 // ---------- 描画 ----------
 function render() {
   el.pageName.textContent = activePage().name;
   renderTagFilter();
+  updateTodayBubble();
 
   const list = visibleItems();
   el.list.innerHTML = '';
@@ -199,14 +216,26 @@ function card(it) {
 
 function renderTagFilter() {
   const tags = usedTags();
+  const today = todayItems();
   el.tagFilter.innerHTML = '';
-  if (tags.length === 0) return;
+  // 本日更新が無いのにそのフィルタ中なら解除
+  if (activeTag === TODAY_FILTER && today.length === 0) activeTag = null;
+  if (tags.length === 0 && today.length === 0) return;
 
   const all = document.createElement('button');
   all.className = 'filter-chip' + (activeTag ? '' : ' active');
   all.textContent = 'すべて';
   all.onclick = () => { activeTag = null; render(); };
   el.tagFilter.appendChild(all);
+
+  // 当日更新があれば赤い特別チップ
+  if (today.length) {
+    const tb = document.createElement('button');
+    tb.className = 'filter-chip today-chip' + (activeTag === TODAY_FILTER ? ' active' : '');
+    tb.innerHTML = `🔔 本日更新 <span class="today-count">${today.length}</span>`;
+    tb.onclick = () => { activeTag = activeTag === TODAY_FILTER ? null : TODAY_FILTER; render(); };
+    el.tagFilter.appendChild(tb);
+  }
 
   for (const t of tags) {
     const b = document.createElement('button');
@@ -302,8 +331,10 @@ form.addEventListener('submit', (e) => {
     const it = items().find((x) => x.id === id);
     Object.assign(it, data);
     if (editingUsed) it.lastUsed = Date.now();
+    it.updatedAt = Date.now();
   } else {
-    items().push({ id: uid(), ...data, lastUsed: null, createdAt: Date.now() });
+    const now = Date.now();
+    items().push({ id: uid(), ...data, lastUsed: null, createdAt: now, updatedAt: now });
   }
   save();
   render();
@@ -634,11 +665,35 @@ searchInput.addEventListener('input', () => { query = searchInput.value; render(
 const fab = document.getElementById('fab');
 fab.addEventListener('click', () => openSheet(null, false));
 
+// ---------- 本日更新フキダシ ----------
+const todayBubble = document.getElementById('todayBubble');
+const bubbleCount = document.getElementById('bubbleCount');
+const bubbleSub = document.getElementById('bubbleSub');
+
+function updateTodayBubble() {
+  const today = todayItems();
+  if (!today.length) { todayBubble.hidden = true; return; }
+  const latest = today[0];
+  bubbleCount.textContent = `本日更新 ${today.length}件`;
+  bubbleSub.textContent = `${latest.name} ・ ${formatTime(latest.updatedAt)}`;
+  todayBubble.hidden = false;
+}
+
+todayBubble.addEventListener('click', () => {
+  activeTag = TODAY_FILTER;
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
 let scrollTimer = null;
 window.addEventListener('scroll', () => {
   fab.classList.add('hidden');
+  todayBubble.classList.add('scroll-hidden');
   clearTimeout(scrollTimer);
-  scrollTimer = setTimeout(() => fab.classList.remove('hidden'), 220);
+  scrollTimer = setTimeout(() => {
+    fab.classList.remove('hidden');
+    todayBubble.classList.remove('scroll-hidden');
+  }, 220);
 }, { passive: true });
 
 // 背景 / ハンドルで閉じる
